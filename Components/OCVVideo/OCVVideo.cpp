@@ -122,6 +122,8 @@ bool OCVVideo::OpenMovie(wxString csMovieName, void *pVideoWindow, int type)
 	if (res)
 	{
 		m_MovieName = csMovieName;
+		g_sub_filename = m_MovieName.SubString(0, m_MovieName.Last(wxT('.'))) + wxT("srt");
+		g_nIdx = -1;
 
 		m_origWidth = m_VC.get(cv::CAP_PROP_FRAME_WIDTH);
 		m_origHeight = m_VC.get(cv::CAP_PROP_FRAME_HEIGHT);

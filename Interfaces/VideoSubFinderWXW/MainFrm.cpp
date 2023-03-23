@@ -183,6 +183,18 @@ void CMainFrame::OnViewRGBImage(wxThreadEvent& event)
 
 /////////////////////////////////////////////////////////////////////////////
 
+void OcrLog(wxString text)
+{
+	if (g_pMF->m_blnNoGUI) {
+		cout << text;
+		cout.flush();
+	} else {
+		*g_pMF->m_pImageBox->m_pLog << text;
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////////
+
 BEGIN_EVENT_TABLE(CMainFrame, wxFrame)
 	EVT_SIZE(CMainFrame::OnSize)
 	EVT_MENU(ID_PLAY_PAUSE, CMainFrame::OnPlayPause)
@@ -1562,7 +1574,7 @@ wxString CMainFrame::ConvertTime(u64 total_milliseconds)
 	val -= min * 60;
 	sec = val;
 
-	str.Printf(wxT("%02dh:%02dm:%02ds"), hour, min, sec);
+	str.Printf(wxT("%02d:%02d:%02d"), hour, min, sec);
 
 	return str;
 }
@@ -1599,6 +1611,7 @@ void CMainFrame::OnTimer(wxTimerEvent& event)
 				}
 
 				wxString str;
+				if (g_tOCR) str.Printf(wxT("%d: %d/%d   |   %s   %s/%s   |   "), g_nCnt, g_nIdx, g_nMax, str_progress, ConvertTime(run_time), str_eta); else
 				str.Printf(wxT("progress: %s eta : %s run_time : %s   |   "), str_progress, str_eta, ConvertTime(run_time));
 
 				m_pVideoBox->m_plblTIME->SetLabel(str + ConvertVideoTime(Cur) + m_EndTimeStr + "   ");

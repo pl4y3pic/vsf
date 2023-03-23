@@ -38,6 +38,13 @@ typedef unsigned long long	u64;
 typedef long long	                s64;
 #endif
 
+#define OCR_NONE	0
+#define OCR_BAIDU	1
+#define OCR_TENCENT	2
+extern int g_tOCR, g_nMax, g_nCnt, g_nIdx;
+extern wxString g_key, g_sub_filename;
+extern void OcrLog(wxString text);
+
 wxString get_add_info();
 
 extern void PlaySound(wxString path);

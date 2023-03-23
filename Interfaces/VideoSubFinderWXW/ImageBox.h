@@ -45,6 +45,7 @@ public:
 	CImageBox(CMainFrame* pMF);           // protected constructor used by dynamic creation
 	~CImageBox();
 
+	wxTextCtrl	*m_pLog;
 	CStaticText	*m_plblIB;
 	CImageWnd   *m_pIW;
 

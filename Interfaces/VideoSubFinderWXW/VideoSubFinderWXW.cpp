@@ -177,6 +177,7 @@ bool CVideoSubFinderApp::Initialize(int& argc, wxChar **argv)
 		{ wxCMD_LINE_SWITCH, "ovocv", "open_video_opencv", g_cfg.m_help_desc_for_open_video_opencv },
 		{ wxCMD_LINE_SWITCH, "ovffmpeg", "open_video_ffmpeg", g_cfg.m_help_desc_for_open_video_ffmpeg },
 		{ wxCMD_LINE_SWITCH, "uc", "use_cuda", g_cfg.m_help_desc_for_use_cuda },
+		{ wxCMD_LINE_OPTION, "k", "secret_keys", "baidu(\"AK SK\") / tencent(\"SECRET_ID SECRET_KEY\")" },
 		{ wxCMD_LINE_OPTION, "s", "start_time", g_cfg.m_help_desc_for_start_time },
 		{ wxCMD_LINE_OPTION, "e", "end_time", g_cfg.m_help_desc_for_end_time },
 		{ wxCMD_LINE_OPTION, "te", "top_video_image_percent_end", g_cfg.m_help_desc_for_top_video_image_percent_end, wxCMD_LINE_VAL_DOUBLE },
@@ -200,6 +201,10 @@ bool CVideoSubFinderApp::Initialize(int& argc, wxChar **argv)
 	if (g_pParser->Parse() != 0)
 	{
 		return false;
+	}
+
+	if (g_pParser->Found("k", &g_key)) {
+		g_tOCR = g_key.starts_with("AKID") ? OCR_TENCENT : OCR_BAIDU;
 	}
 
 	if (g_pParser->Found("gs", &Str))

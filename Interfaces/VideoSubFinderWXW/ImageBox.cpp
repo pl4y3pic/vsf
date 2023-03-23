@@ -86,6 +86,13 @@ void CImageBox::Init()
 
 	m_pIW = new CImageWnd(this);
 	m_pIW->SetBackgroundColour(g_cfg.m_video_image_box_background_colour);
+	if (g_tOCR) {
+		wxString t = (g_tOCR == OCR_BAIDU) ? wxT(" (Baidu)") : wxT(" (Tencent)");
+		m_plblIB->SetLabel(wxT("OCR Box") + t);
+		m_pIW->Show(false);
+		m_pLog = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxTE_MULTILINE);
+		m_pLog->SetBackgroundColour(*wxLIGHT_GREY);
+	}
 
 	this->SetBackgroundColour(m_IBColor);
 	this->SetSize(20,20,402,300);
@@ -124,6 +131,7 @@ void CImageBox::OnSize( wxSizeEvent& event )
 
 	m_plblIB->SetSize(rlIB);
 	m_pIW->SetSize(rcIW);
+	if (g_tOCR) m_pLog->SetSize(0, 28, w, h - 28);
 
 	m_pIW->Refresh(false);
 	m_pIW->Update();

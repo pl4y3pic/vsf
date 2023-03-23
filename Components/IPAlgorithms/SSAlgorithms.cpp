@@ -410,6 +410,179 @@ inline shared_custom_task TaskConvertImage(int fn, my_event &evt_rgb, my_event &
 	});
 }
 
+#include <openssl/sha.h>
+#include <openssl/hmac.h>
+#include <curl/curl.h>
+#ifdef __WINDOWS__
+#include <json/json.h>
+#else
+#include <jsoncpp/json/json.h>
+#endif
+
+using namespace std;
+
+int g_nMax, g_nCnt, g_nIdx;
+int g_tOCR = OCR_NONE;
+wxString g_key, g_sub_filename;
+
+static string get_date(int64_t& timestamp)
+{
+	string utcDate;
+	char buff[20] = { 0 };
+	struct tm sttime;
+#ifdef __WINDOWS__
+	gmtime_s(&sttime, &timestamp);
+#else
+	gmtime_r(&timestamp, &sttime);
+#endif
+	strftime(buff, sizeof(buff), "%Y-%m-%d", &sttime);
+	utcDate = string(buff);
+	return utcDate;
+}
+
+static string int2str(int64_t n)
+{
+	stringstream ss;
+	ss << n;
+	return ss.str();
+}
+
+static string HexEncode(unsigned char* input, size_t len)
+{
+	static const char* const lut = "0123456789abcdef";
+
+	string output;
+	output.reserve(2 * len);
+	for (size_t i = 0; i < len; ++i)
+	{
+		const unsigned char c = input[i];
+		output.push_back(lut[c >> 4]);
+		output.push_back(lut[c & 15]);
+}
+	return output;
+}
+
+static string sha256Hex(const string& str)
+{
+	unsigned char hash[SHA256_DIGEST_LENGTH];
+
+#ifdef OPENSSL_NO_DEPRECATED_3_0
+	SHA256_CTX sha256;
+	SHA256_Init(&sha256);
+	SHA256_Update(&sha256, str.c_str(), str.size());
+	SHA256_Final(hash, &sha256);
+#else
+	SHA256((const unsigned char*)str.c_str(), str.size(), hash);
+#endif
+	return HexEncode(hash, SHA256_DIGEST_LENGTH);
+}
+
+static void HmacSha256(unsigned char* md, void* key, const string& input, int key_len=32)
+{
+	unsigned int len = 32;
+#ifdef OPENSSL_NO_DEPRECATED_3_0
+	HMAC_CTX* h;
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	HMAC_CTX hmac;
+	HMAC_CTX_init(&hmac);
+	h = &hmac;
+#else
+	h = HMAC_CTX_new();
+#endif
+
+	HMAC_Init_ex(h, key, key_len, EVP_sha256(), NULL);
+	HMAC_Update(h, (unsigned char*)&input[0], input.length());
+	HMAC_Final(h, md, &len);
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	HMAC_CTX_cleanup(h);
+#else
+	HMAC_CTX_free(h);
+#endif
+#else
+	HMAC(EVP_sha256(), key, key_len,
+		(const unsigned char*)&input[0], input.size(),
+		md, &len);
+#endif
+}
+
+static string ocr_url;
+static string SECRET_ID, SECRET_KEY; // tencent keys
+
+static size_t curl_writer(void* ptr, size_t size, size_t nmemb, void* stream)
+{
+	size *= nmemb;
+	static_cast<string*>(stream)->append((const char*)ptr, size);
+	return size;
+}
+
+static int ocr_keys(wxString keys)
+{
+	if (g_tOCR == OCR_BAIDU)
+	{
+		static string token;
+		if (token.empty())
+		{
+			static string baidu_token_url = "https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=";
+			string s = "";
+			CURL* curl = curl_easy_init();
+			keys.Replace(wxT(" "), wxT("&client_secret="));
+			curl_easy_setopt(curl, CURLOPT_URL, (baidu_token_url + string(keys.c_str())).data());
+			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
+			curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writer);
+			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+			curl_easy_perform(curl);
+			curl_easy_cleanup(curl);
+
+			Json::Reader reader;
+			Json::Value root;
+			reader.parse(s, root);
+			token = root["access_token"].asString();
+			ocr_url = "https://aip.baidubce.com/rest/2.0/ocr/v1/general?access_token=" + token;
+		}
+	}
+	else // OCR_TENCENT
+	{
+		int i = keys.Find(' ');
+		SECRET_ID = keys.Left(i);
+		SECRET_KEY = "TC3" + keys.Remove(0, i + 1);
+		ocr_url = "https://ocr.tencentcloudapi.com/";
+	}
+
+	return 0;
+}
+
+typedef struct {
+	string retry;
+	string error;
+	string words;
+	string word;
+	string rect;
+	string top;
+	string height;
+} ResultKeys_t;
+const ResultKeys_t rk[] = {
+	{ // BAIDU
+		"qps request limit",
+		"error_msg",
+		"words_result",
+		"words",
+		"location",
+		"top",
+		"height",
+	},
+	{ // TENCENT
+		"RequestLimitExceeded",
+		"Error",
+		"TextDetections",
+		"DetectedText",
+		"ItemPolygon",
+		"Y",
+		"Height",
+	}
+};
+
 class RunSearch
 {
 	int m_threads;
@@ -594,6 +767,179 @@ public:
 		wait_all(begin(m_thrs_save_images), end(m_thrs_save_images));
 	}
 
+	void AddOcrTask(vector<uchar>& img, string* ss, int h, int n)
+	{
+		m_thrs_save_images.emplace_back(shared_custom_task([img, ss, h, n]
+			{
+				FILE* fp;
+				const ResultKeys_t& k = rk[g_tOCR - 1];
+
+				// base64 encode
+				size_t len = img.size();
+				// save jpeg
+				//fp = fopen(wxString::Format("%s.%03d.jpeg", sub_filename, sCount).c_str(), "wb"); fwrite(img.data(), 1, len, fp); fclose(fp);
+				char* b64img = new char[(len + 2) / 3 * 4 + 1];
+				len = EVP_EncodeBlock((unsigned char*)b64img, (unsigned char*)img.data(), len);
+				b64img[len] = 0;
+				OcrLog(wxString::Format("%03d: %lld\n", g_nCnt, len));
+				if (g_nCnt == 1) {
+					ocr_keys(g_key);
+					unlink(g_sub_filename.mb_str());
+				}
+				if (g_pV) g_nCnt++;
+
+				if (1) {
+					string s, payload;
+					CURL* curl = curl_easy_init();
+					curl_easy_setopt(curl, CURLOPT_URL, ocr_url.data());
+					curl_easy_setopt(curl, CURLOPT_POST, 1);
+					curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+					curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writer);
+					if (g_tOCR == OCR_BAIDU)
+					{
+						curl_httppost* post = NULL;
+						curl_httppost* last = NULL;
+						curl_formadd(&post, &last, CURLFORM_COPYNAME, "image", CURLFORM_COPYCONTENTS, b64img, CURLFORM_END);
+						curl_easy_setopt(curl, CURLOPT_HTTPPOST, post);
+					}
+					else // OCR_TENCENT
+					{
+						time_t timenow;
+						int64_t timestamp = time(&timenow);
+						string date = get_date(timestamp);
+
+						// ************* 步骤 1：拼接规范请求串 *************
+						payload = "{\"ImageBase64\":\"" + string(b64img) + "\"}";
+						s = "POST\n"
+							"/\n"
+							"\n"
+							"content-type:application/json\n"
+							"host:ocr.tencentcloudapi.com\n"
+							"\n"
+							"content-type;host\n"
+							+ sha256Hex(payload);
+
+						// ************* 步骤 2：拼接待签名字符串 *************
+						string t = int2str(timestamp);
+						string stringToSign = "TC3-HMAC-SHA256\n" + t + "\n" + date
+							+ "/ocr/tc3_request\n" + sha256Hex(s);
+
+						// ************* 步骤 3：计算签名 ***************
+						unsigned char md1[32], md2[32];
+						HmacSha256(md1, &SECRET_KEY[0], date, SECRET_KEY.size());
+						HmacSha256(md2, md1, "ocr");
+						HmacSha256(md1, md2, "tc3_request");
+						HmacSha256(md2, md1, stringToSign);
+						s = HexEncode(md2, 32);
+
+						// ************* 步骤 4：拼接 Authorization *************
+						s = "Authorization: TC3-HMAC-SHA256 Credential=" + SECRET_ID + "/" + date
+							+ "/ocr/tc3_request, SignedHeaders=content-type;host, Signature=" + s;
+						t = "X-TC-Timestamp: " + t;
+
+						struct curl_slist* headers = NULL;
+						headers = curl_slist_append(headers, "Host: ocr.tencentcloudapi.com");
+						headers = curl_slist_append(headers, "X-TC-Action: GeneralAccurateOCR");
+						headers = curl_slist_append(headers, "X-TC-Version: 2018-11-19");
+						headers = curl_slist_append(headers, "X-TC-Region: ap-guangzhou");
+						headers = curl_slist_append(headers, "Content-Type: application/json");
+						headers = curl_slist_append(headers, s.c_str());
+						headers = curl_slist_append(headers, t.c_str());
+						curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+						curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.data());
+					}
+
+					while (1) {
+						s = "";
+						curl_easy_perform(curl);
+						if (s.find(k.retry) == string::npos) break;
+						wxYield();
+					}
+					curl_easy_cleanup(curl);
+					//SaveToReportLog(wxString(s.c_str(), wxConvUTF8));
+
+					// get ocr result
+					Json::Reader reader;
+					Json::Value root, v;
+					reader.parse(s, root);
+					if (g_tOCR == OCR_TENCENT) root = root["Response"];
+					v = root[k.error];
+					if (v) {
+						if (g_tOCR == OCR_TENCENT) v = v["Message"];
+						s = string(v.asCString()); // error message
+					}
+					else {
+						v = root[k.words];
+						s = "";
+						int i = 0;
+						while (v[i]) {
+							string t = string(v[i][k.word].asCString()) + "\n";
+							Json::Value p = v[i][k.rect];
+							int j = (p[k.top].asInt() + p[k.height].asInt() / 2) / h;
+							ss[j].append(t);
+							s.append(t);
+							i++;
+						}
+					}
+					OcrLog(wxString(s.c_str(), wxConvUTF8));
+
+					// write srt
+					while (1) {
+						fp = fopen(g_sub_filename.mb_str(), "a");
+						if (fp) break;
+						wxYield();
+					}
+					for (int i = 0; i < n; i++) {
+						fputs(ss[i].c_str(), fp);
+					}
+					fclose(fp);
+				}
+
+				delete[] b64img;
+				delete[] ss;
+			})
+		);
+	}
+
+	void AddImageToOcr(cv::Mat* im = NULL, wxString name = wxEmptyString)
+	{
+		static int w, h;
+		static string* ss = NULL;
+		static cv::Mat dst;
+
+		if (im) {
+			if (g_nIdx < 0) { // initialize nmax/w/h
+				w = im->cols;
+				h = im->rows;
+				g_nMax = (g_tOCR == OCR_BAIDU ? 4096 : (10000000 / w)) / h;
+				OcrLog(wxString::Format("%s: %d\n", g_sub_filename, g_nMax));
+				g_nCnt = 1;
+				g_nIdx = 0;
+			}
+			if (g_nIdx == 0) {
+				dst = cv::Mat::zeros(h * g_nMax, w, im->type());
+				ss = new string[g_nMax];
+			}
+			OcrLog(".");
+			im->copyTo(dst(cv::Rect(0, g_nIdx * h, w, h)));
+			ss[g_nIdx] = (wxT("\n0\n") + name.SubString(0, 11) + wxT(" --> ") + name.SubString(14, 25) + wxT("\n")).c_str();
+			if (++g_nIdx < g_nMax) return;
+		}
+		else if (g_nIdx <= 0) {
+			g_nIdx = -1;
+			return;
+		}
+
+		//vector<int> compression_params;
+		//compression_params.push_back(CV_IMWRITE_JPEG_QUALITY);
+		//compression_params.push_back(100);
+		vector<uchar> img;
+		cv::imencode(cv::String(g_im_save_format), dst, img);//, compression_params);
+		AddOcrTask(img, ss, h, g_nIdx);
+
+		g_nIdx = im ? 0 : -1;
+	}
+
 	void AddSaveImagesTask(simple_buffer<u8>& ImBGR, simple_buffer<u8>& ImISA, simple_buffer<u16>& ImILA, wxString name)
 	{
 		int w = m_w;
@@ -605,6 +951,17 @@ public:
 		int ymin = m_ymin;
 		int ymax = m_ymax;
 		bool convert_to_lab = m_convert_to_lab;
+
+		if (g_tOCR) {
+			simple_buffer<u8> ImTMP_BGR(W * H * 3);
+			ImBGRToNativeSize(ImBGR, ImTMP_BGR, w, h, W, H, xmin, xmax, ymin, ymax);
+			g_pViewBGRImage[0](ImTMP_BGR, W, H);
+
+			cv::Mat im;
+			BGRImageToMat(ImBGR, w, h, im);
+			AddImageToOcr(&im, name);
+			return;
+		}
 
 		m_thrs_save_images.emplace_back(shared_custom_task([ImBGR, ImISA, ImILA, name, w, h, W, H, xmin, xmax, ymin, ymax, convert_to_lab]() mutable {
 					{
@@ -1981,6 +2338,7 @@ s64 FastSearchSubtitles(wxThread *pThr, CVideo *pV, s64 Begin, s64 End)
 	}
 
 	g_pV = NULL;
+	if (g_tOCR && g_RunSubSearch) rs.AddImageToOcr();
 
 	if (g_RunSubSearch == 0)
 	{
@@ -2813,6 +3171,7 @@ wxString VideoTimeToStr(s64 pos)
 	val -= min * 60;
 	sec = val;
 
+	if (g_tOCR) str.Printf(wxT("%02d:%02d:%02d,%03d"), hour, min, sec, msec); else
 	str.Printf(wxT("%d_%02d_%02d_%03d"), hour, min, sec, msec);
 
 	return str;
