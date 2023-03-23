@@ -217,10 +217,6 @@ void CSettingsPanel::Init()
 	m_pOI->AddProperty(g_cfg.m_label_dA_color, g_cfg.m_main_labels_background_colour, g_cfg.m_main_text_ctls_background_colour, &g_dA_color, 0, 255);
 	m_pOI->AddProperty(g_cfg.m_label_dB_color, g_cfg.m_main_labels_background_colour, g_cfg.m_main_text_ctls_background_colour, &g_dB_color, 0, 255);	
 	
-	m_pOI->AddProperty(g_cfg.m_ssp_hw_device, g_cfg.m_main_labels_background_colour, g_cfg.m_main_text_ctls_background_colour, &g_hw_device, GetAvailableHWDeviceTypes());
-	
-	m_pOI->AddProperty(g_cfg.m_label_filter_descr, g_cfg.m_main_labels_background_colour, g_cfg.m_main_text_ctls_background_colour, &g_filter_descr);
-
 #ifdef USE_CUDA
 	m_pOI->AddProperty(g_cfg.m_ssp_oi_property_use_cuda_gpu, g_cfg.m_main_labels_background_colour, g_cfg.m_main_text_ctls_background_colour, &g_use_cuda_gpu);
 #else

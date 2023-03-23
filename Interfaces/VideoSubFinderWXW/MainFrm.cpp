@@ -633,13 +633,7 @@ void CMainFrame::OnFileOpenVideo(int type)
 	m_type = type;
 	csFileName = m_FileName;
 
-	if (m_type == 0) m_pVideo = GetOCVVideoObject();
-	else if (m_type == 1) m_pVideo = GetFFMPEGVideoObject();
-	else
-	{
-		(void)wxMessageBox("ERROR: Unknown video type for OnFileOpenVideo");
-		return;
-	}	
+	m_pVideo = GetOCVVideoObject();
 
 	m_pVideo->m_Dir = g_work_dir;
 
@@ -1101,16 +1095,6 @@ void LoadSettings()
 
 	ReadProperty(g_general_settings, g_remove_wide_symbols, "remove_wide_symbols");
 
-	ReadProperty(g_general_settings, g_hw_device, "hw_device");
-
-	if (ReadProperty(g_general_settings, g_filter_descr, "filter_descr"))
-	{
-		if (g_filter_descr == wxT("none"))
-		{
-			g_filter_descr = wxT("");
-		}
-	}
-
 	ReadProperty(g_general_settings, g_save_each_substring_separately, "save_each_substring_separately");
 	ReadProperty(g_general_settings, g_save_scaled_images, "save_scaled_images");
 
@@ -1457,12 +1441,6 @@ void SaveSettings()
 	WriteProperty(fout, g_max_dl_up, "max_dl_up");
 
 	WriteProperty(fout, g_remove_wide_symbols, "remove_wide_symbols");
-
-	WriteProperty(fout, g_hw_device, "hw_device");
-
-	wxString wxstr_val;
-	(g_filter_descr == wxT("")) ? wxstr_val = wxT("none") : wxstr_val = g_filter_descr;
-	WriteProperty(fout, wxstr_val, "filter_descr");
 
 	WriteProperty(fout, g_text_alignment_string, "text_alignment");
 

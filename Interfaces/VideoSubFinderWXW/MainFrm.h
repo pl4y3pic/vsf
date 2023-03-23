@@ -28,7 +28,6 @@
 #include "VideoBox.h"
 #include "ImageBox.h"
 #include "OCVVideoLoader.h"
-#include "FFMPEGVideoLoader.h"
 #include "SSAlgorithms.h"
 #include "IPAlgorithms.h"
 #include <time.h>

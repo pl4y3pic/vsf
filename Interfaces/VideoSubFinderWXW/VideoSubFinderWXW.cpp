@@ -330,8 +330,7 @@ bool CVideoSubFinderApp::OnInit()
 			m_pMainWnd->m_blnNoGUI = true;
 			SaveToReportLog("setting: m_pMainWnd->m_blnNoGUI = true\n");
 
-			if (m_pMainWnd->m_type == 0) m_pMainWnd->m_pVideo = GetOCVVideoObject();
-			else if (m_pMainWnd->m_type == 1) m_pMainWnd->m_pVideo = GetFFMPEGVideoObject();
+			m_pMainWnd->m_pVideo = GetOCVVideoObject();
 
 			if (m_pMainWnd->m_pVideo->OpenMovie(m_pMainWnd->m_FileName, NULL, 0))
 			{
