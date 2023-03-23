@@ -28,33 +28,28 @@ if (WIN32)
 	target_link_libraries(VideoSubFinderWXW PUBLIC
 		IPAlgorithms
 		OCVVideo
-		FFMPEGVideo
 		${CUDAKernels_LIB}
-		wxmsw32u_aui.lib
-		wxmsw32u_media.lib
-		wxmsw32u_core.lib
-		wxmsw32u_adv.lib
-		wxbase32u.lib
-		wxtiff.lib
-		wxjpeg.lib
-		wxpng.lib
-		wxzlib.lib
-		wxregexu.lib
-		wxexpat.lib
+		wxmsw32u${D}_aui.lib
+		wxmsw32u${D}_media.lib
+		wxmsw32u${D}_core.lib
+		wxmsw32u${D}_adv.lib
+		wxbase32u${D}.lib
+		wxtiff${D}.lib
+		wxjpeg${D}.lib
+		wxpng${D}.lib
+		wxzlib${D}.lib
+		wxregexu${D}.lib
+		wxexpat${D}.lib
 		winmm.lib
 		comctl32.lib
 		rpcrt4.lib
 		wsock32.lib
 		odbc32.lib
 		vfw32.lib
-		avdevice.lib
-		avformat.lib
-		avfilter.lib
-		avcodec.lib
-		swresample.lib
-		swscale.lib
-		avutil.lib		
 		${OpenCV_LIBS}
+		libcrypto.lib
+		libcurl.lib
+		jsoncpp.lib
 	)	
 else()
 	target_compile_definitions(VideoSubFinderWXW PUBLIC
@@ -70,17 +65,14 @@ else()
 	target_link_libraries(VideoSubFinderWXW PUBLIC
 		IPAlgorithms
 		OCVVideo
-		FFMPEGVideo
 		${CUDAKernels_LIB}
 		${wxWidgets_LIBRARIES}
 		${OpenCV_LIBS}
-		avcodec
-		avformat
-		avutil
-		swscale
-		avfilter
 		tbb
 		X11
+		crypto
+		curl
+		jsoncpp
 	)
 endif (WIN32)
 
