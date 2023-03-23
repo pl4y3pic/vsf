@@ -77,7 +77,7 @@ void CBitmapButton::SetBitmaps(const wxImage& image,
 void CBitmapButton::OnLButtonDown( wxMouseEvent& event )
 {
 	m_bDown = true;
-	this->CaptureMouse();
+	//this->CaptureMouse();
 	this->Refresh(true);
 	
 	wxCommandEvent bnev(wxEVT_BUTTON, this->GetId());
@@ -89,7 +89,7 @@ void CBitmapButton::OnLButtonUp( wxMouseEvent& event )
 	if (m_bDown == true) 
 	{
 		m_bDown = false;
-		this->ReleaseMouse();		
+		//this->ReleaseMouse();		
 		this->Refresh(true);
 	}
 }

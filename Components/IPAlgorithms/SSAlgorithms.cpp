@@ -1489,7 +1489,7 @@ s64 FastSearchSubtitles(wxThread *pThr, CVideo *pV, s64 Begin, s64 End)
 	int DL, threads;
 
 	int bf, ef; // begin, end frame
-	int pbf, pef;
+	int pbf = -1, pef;
 	s64 bt, et; // begin, end time
 	s64 pbt, pet;
 

@@ -1755,7 +1755,7 @@ void CMainFrame::OnClose(wxCloseEvent& WXUNUSED(event))
 
 	if (g_IsSearching == 1)
 	{
-		m_pPanel->m_pSHPanel->m_pSearchThread->Delete();
+		//m_pPanel->m_pSHPanel->m_pSearchThread->Delete();
 	}
 
 	if (g_IsCreateClearedTextImages == 1)
